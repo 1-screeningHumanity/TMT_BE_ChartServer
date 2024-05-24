@@ -56,6 +56,11 @@ public class KisApiServiceImp implements KisApiService {
 		KisAccessToken kisAccessToken = objectMapper.readValue(response.getBody(),
 				KisAccessToken.class);
 
+		// 토큰 시간(86400초) 지정 후 Redis 에 토큰 저장
+		redisTemplate.opsForValue()
+				.set("kisAccessToken", objectMapper.writeValueAsString(kisAccessToken),
+						Long.parseLong(kisAccessToken.getExpires_in()), TimeUnit.SECONDS);
+
 		return kisAccessToken;
 	}
 
