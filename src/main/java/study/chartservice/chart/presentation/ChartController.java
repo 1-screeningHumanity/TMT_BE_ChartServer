@@ -1,4 +1,4 @@
-package study.chartservice.chart.controller;
+package study.chartservice.chart.presentation;
 
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
