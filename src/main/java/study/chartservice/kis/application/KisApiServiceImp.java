@@ -31,10 +31,12 @@ public class KisApiServiceImp implements KisApiService {
 	private String appSecret;
 
 	@Override
-	public KisAccessToken getKisAccessToken() {
-		return null;
-	}
+	public KisAccessToken getKisAccessToken() throws JsonProcessingException {
+		String token = redisTemplate.opsForValue().get("kisAccessToken");
 
+		return token == null ? createKisAccessToken() : objectMapper.readValue(
+				token, KisAccessToken.class);
+	}
 	private KisAccessToken createKisAccessToken() throws JsonProcessingException {
 		// Request Body 설정
 		Map<String, String> body = new HashMap<>();
