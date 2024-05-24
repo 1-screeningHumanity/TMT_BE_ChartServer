@@ -1,4 +1,4 @@
-package study.chartservice.kis.common;
+package study.chartservice.common;
 
 import lombok.Getter;
 

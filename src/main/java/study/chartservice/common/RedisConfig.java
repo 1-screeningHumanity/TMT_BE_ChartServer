@@ -1,4 +1,4 @@
-package study.chartservice.kis.common;
+package study.chartservice.common;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

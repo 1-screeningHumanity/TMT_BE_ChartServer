@@ -13,7 +13,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import study.chartservice.kis.common.KisUrls;
+import study.chartservice.common.KisUrls;
 import study.chartservice.kis.domain.KisAccessToken;
 
 @Service
