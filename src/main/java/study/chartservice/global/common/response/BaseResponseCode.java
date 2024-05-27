@@ -37,7 +37,8 @@ public enum BaseResponseCode {
 	METHOD_NOT_ALLOW_ERROR(HttpStatus.METHOD_NOT_ALLOWED, false, 9500, "(exception error 메세지에 따름)"),
 	TOKEN_IS_EXPIRED_ERROR(HttpStatus.UNAUTHORIZED, false, 9999, "(gateway 에서 error 처리)"),
 
-	STOCK_NAME_NOT_FOUND(HttpStatus.BAD_REQUEST, false, 6000, "종목 이름 조회 실패");
+	STOCK_NAME_NOT_FOUND(HttpStatus.BAD_REQUEST, false, 6000, "종목 이름 조회 실패"),
+	INVESTOR_NOT_FOUND(HttpStatus.BAD_REQUEST, false, 6001, "투자자 비율 조회 실패");
 
 	private final HttpStatus httpStatus;
 	private final boolean isSuccess;
