@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: chart-server
+  data:
+    mongodb:
+      uri: ${CHART_DB_MONGO}
+      auto-index-creation: true
+    redis:
+      host: ${REDIS_DB}
+      port: ${REDIS_PORT}
+
+server:
+  port: 0
+
+#eureka
+eureka:
+  instance:
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+    hostname: chart-server
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_URl}
+
+springdoc:
+  packages-to-scan: study.chartservice
+  default-consumes-media-type: application/json;charset=UTF-8
+  default-produces-media-type: application/json;charset=UTF-8
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    display-query-params-without-oauth2: true
+    doc-expansion: none
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /api-docs/json
+    groups:
+      enabled: true
+  cache:
+    disabled: true
+
+#Token
+JWT:
+  SECRET_KEY: sldkfjsoidfjwoeir12393012809vxcv89usdfkjn1203491iu0isdfl
+
+kis:
+  app:
+    key: ${KIS_APP_KEY}
+    secret: ${KIS_APP_SECRET}
+  realApp:
+    key: ${KIS_REAL_APP_KEY}
+    secret: ${KIS_REAL_APP_SECRET}
