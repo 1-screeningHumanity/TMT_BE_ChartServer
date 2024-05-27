@@ -62,7 +62,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
-	@Scheduled(cron = "0 20 17 * * MON-FRI")    // 평일 17시 호출
+	@Scheduled(cron = "0 25 17 * * MON-FRI")    // 평일 17시 호출
 	public void collectKisDataOfDay() {
 		log.info("collectKisDataOfDay 스케줄러 실행");
 		String nowDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
