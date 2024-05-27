@@ -24,11 +24,14 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 import study.chartservice.chart.domain.CompanyInfo;
 import study.chartservice.chart.domain.DayOfStock;
+import study.chartservice.chart.domain.Investor;
 import study.chartservice.chart.domain.MonthOfStock;
 import study.chartservice.chart.domain.WeekOfStock;
 import study.chartservice.chart.domain.YearOfStock;
+import study.chartservice.kis.dto.resp.InvestorDataDto;
 import study.chartservice.chart.infrastructure.CompanyInfoRepository;
 import study.chartservice.chart.infrastructure.DayOfStockRepository;
+import study.chartservice.chart.infrastructure.InvestorRepository;
 import study.chartservice.chart.infrastructure.MonthOfStockRepository;
 import study.chartservice.chart.infrastructure.WeekOfStockRepository;
 import study.chartservice.chart.infrastructure.YearOfStockRepository;
@@ -40,10 +43,11 @@ import study.chartservice.kis.dto.resp.StockDataDto;
 @Slf4j
 public class KisSchedulerServiceImp implements KisSchedulerService {
 
-	public static final String DAY = "D";
-	public static final String WEEK = "W";
-	public static final String MONTH = "M";
-	public static final String YEAR = "Y";
+	private static final String DAY = "D";
+	private static final String WEEK = "W";
+	private static final String MONTH = "M";
+	private static final String YEAR = "Y";
+	private static final Integer LAST_DAY = 1;
 	private final RestTemplate restTemplate;
 	private final ObjectMapper objectMapper;
 	private final KisApiService kisApiService;
@@ -52,6 +56,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	private final WeekOfStockRepository weekOfStockRepository;
 	private final MonthOfStockRepository monthOfStockRepository;
 	private final YearOfStockRepository yearOfStockRepository;
+	private final InvestorRepository investorRepository;
 
 	@Value("${kis.realApp.key}")
 	private String appKey;
@@ -239,8 +244,74 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		log.info("collectKisDataOfYear 스케줄러 종료");
 	}
 
+	@Override
+	@Transactional
+	@Scheduled(cron = "0 0 7 * * *")    // 평일 7시 호출
+	public void collectInvestor() {
+		log.info("collectInvestor 스케줄러 실행");
+
+		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
+
+		companyInfos.forEach(companyInfo -> {
+			// URL 생성
+			UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(
+							KisUrls.STOCK_PRICE_INVESTOR_PATH.getFullUrl())
+					.queryParam("FID_COND_MRKT_DIV_CODE", "J")
+					.queryParam("FID_INPUT_ISCD", companyInfo.getStockCode());
+
+			// Header 생성
+			HttpHeaders headers = new HttpHeaders();
+			headers.setContentType(MediaType.APPLICATION_JSON);
+			headers.set("appkey", appKey);
+			headers.set("appsecret", appSecret);
+			headers.set("tr_id", "FHKST01010900");
+			headers.set("custtype", "P");
+
+			try {
+				headers.set("authorization",
+						"Bearer " + kisApiService.getKisAccessToken().getAccess_token());
+
+				// 한국 투자 증권 API 호출
+				ResponseEntity<String> response = restTemplate.exchange(
+						builder.toUriString(),
+						HttpMethod.GET,
+						new HttpEntity<>(headers),
+						String.class);
+
+				// API 응답 데이터 JSON 파싱
+				JsonNode jsonNode = objectMapper.readTree(response.getBody());
+				List<InvestorDataDto> investorDataDtos = objectMapper.convertValue(jsonNode.path("output"),
+						new TypeReference<>() {
+						});
+
+				// 해당 날짜의 지난날 투자자 정보가 없을 경우
+				if (investorDataDtos.size() < 2) {
+					return;
+				}
+
+				// 해당 날짜의 전 거래일 투자자 정보만 get
+				InvestorDataDto investorDataDto = investorDataDtos.get(LAST_DAY);
+
+				investorRepository.save(Investor.builder()
+						.stockCode(companyInfo.getStockCode())
+						.stck_bsop_date(investorDataDto.getStck_bsop_date())
+						.prsn_ntby_qty(investorDataDto.getPrsn_ntby_qty())
+						.frgn_ntby_qty(investorDataDto.getFrgn_ntby_qty())
+						.orgn_ntby_qty(investorDataDto.getOrgn_ntby_qty())
+						.prdy_vrss_sign(investorDataDto.getPrdy_vrss_sign())
+						.build());
+
+				// 한국 투자 증권 API 연속 호출 방지
+				Thread.sleep(50);
+
+			} catch (JsonProcessingException | InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		});
+	}
+
 	// URL 생성
-	private static UriComponentsBuilder getUriComponentsBuilder(String startDate, String endDate) {
+	private UriComponentsBuilder getUriComponentsBuilder(String startDate, String endDate) {
 		return UriComponentsBuilder.fromHttpUrl(
 						KisUrls.ITEM_CHART_PRICE_PATH.getFullUrl())
 				.queryParam("FID_COND_MRKT_DIV_CODE", "J")
