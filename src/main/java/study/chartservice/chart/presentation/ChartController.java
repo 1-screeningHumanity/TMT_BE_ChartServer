@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import study.chartservice.chart.application.ChartService;
 import study.chartservice.chart.application.CompanyInfoService;
+import study.chartservice.chart.dto.resp.InvestorDto;
 import study.chartservice.chart.dto.resp.StockDto;
 import study.chartservice.chart.vo.resp.StockNameVo;
 import study.chartservice.global.common.response.BaseResponse;
@@ -56,5 +57,12 @@ public class ChartController {
 			@PathVariable("stockCode") String stockCode
 	) {
 		return new BaseResponse<>(chartService.getChartOfYearByStockCode(stockCode));
+	}
+
+	@GetMapping("/{stockCode}/investors")
+	public BaseResponse<InvestorDto> getInvestorByStockCode(
+			@PathVariable("stockCode") String stockCode
+	) {
+		return new BaseResponse<>(chartService.getInvestorByStockCode(stockCode));
 	}
 }
