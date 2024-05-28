@@ -5,11 +5,16 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import study.chartservice.chart.domain.Investor;
+import study.chartservice.chart.dto.resp.InvestorDto;
 import study.chartservice.chart.dto.resp.StockDto;
 import study.chartservice.chart.infrastructure.DayOfStockRepository;
+import study.chartservice.chart.infrastructure.InvestorRepository;
 import study.chartservice.chart.infrastructure.MonthOfStockRepository;
 import study.chartservice.chart.infrastructure.WeekOfStockRepository;
 import study.chartservice.chart.infrastructure.YearOfStockRepository;
+import study.chartservice.global.common.exception.CustomException;
+import study.chartservice.global.common.response.BaseResponseCode;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +25,7 @@ public class ChartServiceImp implements ChartService {
 	private final WeekOfStockRepository weekOfStockRepository;
 	private final MonthOfStockRepository monthOfStockRepository;
 	private final YearOfStockRepository yearOfStockRepository;
+	private final InvestorRepository investorRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -52,4 +58,14 @@ public class ChartServiceImp implements ChartService {
 				.map(yearOfStock -> modelMapper.map(yearOfStock, StockDto.class))
 				.toList();
 	}
+
+	@Override
+	public InvestorDto getInvestorByStockCode(String stockCode) {
+		Investor investor = investorRepository.findByStockCode(stockCode)
+				.orElseThrow(() -> new CustomException(BaseResponseCode.INVESTOR_NOT_FOUND));
+
+		return modelMapper.map(investor, InvestorDto.class);
+	}
+
+
 }
