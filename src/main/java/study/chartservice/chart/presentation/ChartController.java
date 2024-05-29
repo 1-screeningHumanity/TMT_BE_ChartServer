@@ -60,7 +60,7 @@ public class ChartController {
 	}
 
 	@GetMapping("/{stockCode}/investors")
-	public BaseResponse<InvestorDto> getInvestorByStockCode(
+	public BaseResponse<List<InvestorDto>> getInvestorByStockCode(
 			@PathVariable("stockCode") String stockCode
 	) {
 		return new BaseResponse<>(chartService.getInvestorByStockCode(stockCode));
