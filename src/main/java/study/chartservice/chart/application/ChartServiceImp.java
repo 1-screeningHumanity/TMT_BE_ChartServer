@@ -3,6 +3,7 @@ package study.chartservice.chart.application;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import study.chartservice.chart.domain.Investor;
@@ -60,12 +61,18 @@ public class ChartServiceImp implements ChartService {
 	}
 
 	@Override
-	public InvestorDto getInvestorByStockCode(String stockCode) {
-		Investor investor = investorRepository.findByStockCode(stockCode)
-				.orElseThrow(() -> new CustomException(BaseResponseCode.INVESTOR_NOT_FOUND));
+	@Transactional(readOnly = true)
+	public List<InvestorDto> getInvestorByStockCode(String stockCode) {
+		// 날짜 기준 상위 10개만 조회
+		List<Investor> investors = investorRepository.findTopTenByStockCodeDesc(stockCode,
+				PageRequest.of(0, 10));
 
-		return modelMapper.map(investor, InvestorDto.class);
+		if (investors.isEmpty()) {
+			throw new CustomException(BaseResponseCode.INVESTOR_NOT_FOUND);
+		}
+
+		return investors.stream()
+				.map(investor -> modelMapper.map(investor, InvestorDto.class))
+				.toList();
 	}
-
-
 }
