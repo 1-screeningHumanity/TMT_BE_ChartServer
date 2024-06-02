@@ -24,18 +24,22 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 import study.chartservice.chart.domain.CompanyInfo;
 import study.chartservice.chart.domain.DayOfStock;
+import study.chartservice.chart.domain.FluctuationRank;
 import study.chartservice.chart.domain.Investor;
 import study.chartservice.chart.domain.MonthOfStock;
 import study.chartservice.chart.domain.WeekOfStock;
 import study.chartservice.chart.domain.YearOfStock;
-import study.chartservice.kis.dto.resp.InvestorDataDto;
 import study.chartservice.chart.infrastructure.CompanyInfoRepository;
 import study.chartservice.chart.infrastructure.DayOfStockRepository;
+import study.chartservice.chart.infrastructure.FluctuationRankRepository;
 import study.chartservice.chart.infrastructure.InvestorRepository;
 import study.chartservice.chart.infrastructure.MonthOfStockRepository;
 import study.chartservice.chart.infrastructure.WeekOfStockRepository;
 import study.chartservice.chart.infrastructure.YearOfStockRepository;
 import study.chartservice.common.KisUrls;
+import study.chartservice.common.StockRankOrder;
+import study.chartservice.kis.dto.resp.FluctuationRankDataDto;
+import study.chartservice.kis.dto.resp.InvestorDataDto;
 import study.chartservice.kis.dto.resp.StockDataDto;
 
 @Service
@@ -57,6 +61,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	private final MonthOfStockRepository monthOfStockRepository;
 	private final YearOfStockRepository yearOfStockRepository;
 	private final InvestorRepository investorRepository;
+	private final FluctuationRankRepository fluctuationRankRepository;
 
 	@Value("${kis.realApp.key}")
 	private String appKey;
@@ -114,7 +119,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		LocalDate nowDate = LocalDate.now();
 		int year = nowDate.getYear();
 		int month = nowDate.getMonthValue();
-		int day = nowDate.getDayOfMonth()-1;
+		int day = nowDate.getDayOfMonth() - 1;
 
 		String weekMonDays = getWeekMonDays(
 				year + String.format("%02d", month) + String.format("%02d", day));
@@ -246,14 +251,14 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
-	@Scheduled(cron = "0 0 7 * * *")    // 평일 7시 호출
+	@Scheduled(cron = "0 0 7 * * MON-FRI")    // 평일 7시 호출
 	public void collectInvestor() {
 		log.info("collectInvestor 스케줄러 실행");
 
 		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
 
 		companyInfos.forEach(companyInfo -> {
-			UriComponentsBuilder builder = createInvestorUriBuilder(companyInfo);
+			UriComponentsBuilder builder = createInvestorUriBuilder(companyInfo.getStockCode());
 
 			try {
 				List<InvestorDataDto> investorDataDtos = fetchAndExtractInvestorData(builder);
@@ -285,10 +290,66 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		log.info("collectInvestor 스케줄러 종료");
 	}
 
-	private UriComponentsBuilder createInvestorUriBuilder(CompanyInfo companyInfo) {
+	@Override
+	@Transactional
+	@Scheduled(cron = "0 0/20 9-15 * * MON-FRI")
+	public void collectFluctuationRank() {
+		log.info("collectFluctuationRank 스케줄러 실행");
+
+		// 기존 데이터 삭제 후 새로운 데이터 저장
+		fluctuationRankRepository.deleteAll();
+
+		List.of(StockRankOrder.INCREASE, StockRankOrder.DECREASE).forEach(rankSortClsCode -> {
+			try {
+
+				UriComponentsBuilder builder = createFluctuationRankUriBuilder()
+						.queryParam("FID_RANK_SORT_CLS_CODE", rankSortClsCode.getValue());
+
+				// 한국 투자 증권 API 호출
+				List<FluctuationRank> fluctuationRanks = fetchAndExtractFluctuationRankData(
+						builder).stream()
+						.map(FluctuationRankDataDto -> FluctuationRank.builder()
+								.stockCode(FluctuationRankDataDto.getStck_shrn_iscd())
+								.rankStatus(rankSortClsCode.name())
+								.data_rank(Integer.parseInt(FluctuationRankDataDto.getData_rank()))
+								.hts_kor_isnm(FluctuationRankDataDto.getHts_kor_isnm())
+								.stck_prpr(FluctuationRankDataDto.getStck_prpr())
+								.prdy_vrss(FluctuationRankDataDto.getPrdy_vrss())
+								.prdy_ctrt(FluctuationRankDataDto.getPrdy_ctrt())
+								.prdy_vrss_sign(FluctuationRankDataDto.getPrdy_vrss_sign())
+								.build())
+						.toList();
+
+				fluctuationRankRepository.saveAll(fluctuationRanks);
+			} catch (JsonProcessingException e) {
+				throw new RuntimeException(e);
+			}
+		});
+		log.info("collectFluctuationRank 스케줄러 종료");
+	}
+
+	private UriComponentsBuilder createFluctuationRankUriBuilder() {
+		return UriComponentsBuilder.fromHttpUrl(
+						KisUrls.STOCK_FLUCTUATION_RANK_PATH.getFullUrl())
+				.queryParam("FID_RSFL_RATE2", "")
+				.queryParam("FID_COND_MRKT_DIV_CODE", "J")
+				.queryParam("FID_COND_SCR_DIV_CODE", "20170")
+				.queryParam("FID_INPUT_ISCD", "0000")
+				.queryParam("FID_INPUT_CNT_1", "")
+				.queryParam("FID_PRC_CLS_CODE", "")
+				.queryParam("FID_INPUT_PRICE_1", "")
+				.queryParam("FID_INPUT_PRICE_2", "")
+				.queryParam("FID_VOL_CNT", "")
+				.queryParam("FID_TRGT_CLS_CODE", "0")
+				.queryParam("FID_TRGT_EXLS_CLS_CODE", "0")
+				.queryParam("FID_DIV_CLS_CODE", "0")
+				.queryParam("FID_RSFL_RATE1", "");
+	}
+
+	private UriComponentsBuilder createInvestorUriBuilder(String stockCode) {
 		return UriComponentsBuilder.fromHttpUrl(KisUrls.STOCK_PRICE_INVESTOR_PATH.getFullUrl())
 				.queryParam("FID_COND_MRKT_DIV_CODE", "J")
-				.queryParam("FID_INPUT_ISCD", companyInfo.getStockCode());
+				.queryParam("FID_INPUT_ISCD", stockCode);
 	}
 
 	private UriComponentsBuilder createChartUriBuilder(String startDate, String endDate) {
@@ -299,7 +360,19 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 				.queryParam("FID_ORG_ADJ_PRC", "0");
 	}
 
-	private HttpHeaders createInvestorHeaders() throws JsonProcessingException{
+	private HttpHeaders createFluctuationRankHeaders() throws JsonProcessingException {
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		headers.set("authorization",
+				"Bearer " + kisApiService.getKisAccessToken().getAccess_token());
+		headers.set("appkey", appKey);
+		headers.set("appsecret", appSecret);
+		headers.set("tr_id", "FHPST01700000");
+		headers.set("custtype", "P");
+		return headers;
+	}
+
+	private HttpHeaders createInvestorHeaders() throws JsonProcessingException {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 		headers.set("authorization",
@@ -324,6 +397,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	}
 
 	// 투자자 데이터 추출
+
 	private List<InvestorDataDto> fetchAndExtractInvestorData(UriComponentsBuilder builder)
 			throws JsonProcessingException {
 		// 한국 투자 증권 API 호출
@@ -336,10 +410,10 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		// API 응답 데이터 JSON 파싱
 		JsonNode jsonNode = objectMapper.readTree(response.getBody());
 		return objectMapper.convertValue(jsonNode.path("output"), new TypeReference<>() {
-				});
+		});
 	}
-
 	// 주식 데이터 추출
+
 	private List<StockDataDto> fetchAndExtractStockData(UriComponentsBuilder builder)
 			throws JsonProcessingException {
 		// 한국 투자 증권 API 호출
@@ -352,6 +426,22 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		// API 응답 데이터 JSON 파싱
 		JsonNode jsonNode = objectMapper.readTree(response.getBody());
 		return objectMapper.convertValue(jsonNode.path("output2"), new TypeReference<>() {
+		});
+	}
+
+	// 등락률 순위 데이터 추출
+	private List<FluctuationRankDataDto> fetchAndExtractFluctuationRankData(
+			UriComponentsBuilder builder)
+			throws JsonProcessingException {
+		ResponseEntity<String> response = restTemplate.exchange(
+				builder.toUriString(),
+				HttpMethod.GET,
+				new HttpEntity<>(createFluctuationRankHeaders()),
+				String.class);
+
+		// API 응답 데이터 JSON 파싱
+		JsonNode jsonNode = objectMapper.readTree(response.getBody());
+		return objectMapper.convertValue(jsonNode.path("output"), new TypeReference<>() {
 		});
 	}
 
