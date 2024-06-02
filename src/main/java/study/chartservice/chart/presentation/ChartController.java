@@ -8,9 +8,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import study.chartservice.chart.application.ChartService;
 import study.chartservice.chart.application.CompanyInfoService;
+import study.chartservice.chart.dto.resp.FluctuationRankDto;
 import study.chartservice.chart.dto.resp.InvestorDto;
 import study.chartservice.chart.dto.resp.StockDto;
 import study.chartservice.chart.vo.resp.StockNameVo;
+import study.chartservice.common.StockRankOrder;
 import study.chartservice.global.common.response.BaseResponse;
 
 @RestController
@@ -64,5 +66,17 @@ public class ChartController {
 			@PathVariable("stockCode") String stockCode
 	) {
 		return new BaseResponse<>(chartService.getInvestorByStockCode(stockCode));
+	}
+
+	@GetMapping("/mainpage/plummeting-stocks")
+	public BaseResponse<List<FluctuationRankDto>> getFluctuationRankByDecrease() {
+		return new BaseResponse<>(chartService.getFluctuationRankByDateTimeAndRankStatus(
+				StockRankOrder.DECREASE.name()));
+	}
+
+	@GetMapping("/mainpage/soaring-stocks")
+	public BaseResponse<List<FluctuationRankDto>> getFluctuationRankByIncrease() {
+		return new BaseResponse<>(chartService.getFluctuationRankByDateTimeAndRankStatus(
+				StockRankOrder.INCREASE.name()));
 	}
 }
