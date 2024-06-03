@@ -7,7 +7,8 @@ public enum KisUrls {
 	BASE_URL("https://openapi.koreainvestment.com:9443"),
 	TOKEN_PATH("/oauth2/tokenP"),
 	ITEM_CHART_PRICE_PATH("/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"),
-	STOCK_PRICE_INVESTOR_PATH("/uapi/domestic-stock/v1/quotations/inquire-investor");
+	STOCK_PRICE_INVESTOR_PATH("/uapi/domestic-stock/v1/quotations/inquire-investor"),
+	STOCK_FLUCTUATION_RANK_PATH("/uapi/domestic-stock/v1/ranking/fluctuation");
 
 	private final String path;
 

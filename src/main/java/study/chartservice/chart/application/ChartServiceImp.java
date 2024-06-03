@@ -6,10 +6,13 @@ import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import study.chartservice.chart.domain.FluctuationRank;
 import study.chartservice.chart.domain.Investor;
+import study.chartservice.chart.dto.resp.FluctuationRankDto;
 import study.chartservice.chart.dto.resp.InvestorDto;
 import study.chartservice.chart.dto.resp.StockDto;
 import study.chartservice.chart.infrastructure.DayOfStockRepository;
+import study.chartservice.chart.infrastructure.FluctuationRankRepository;
 import study.chartservice.chart.infrastructure.InvestorRepository;
 import study.chartservice.chart.infrastructure.MonthOfStockRepository;
 import study.chartservice.chart.infrastructure.WeekOfStockRepository;
@@ -27,6 +30,7 @@ public class ChartServiceImp implements ChartService {
 	private final MonthOfStockRepository monthOfStockRepository;
 	private final YearOfStockRepository yearOfStockRepository;
 	private final InvestorRepository investorRepository;
+	private final FluctuationRankRepository fluctuationRankRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -73,6 +77,21 @@ public class ChartServiceImp implements ChartService {
 
 		return investors.stream()
 				.map(investor -> modelMapper.map(investor, InvestorDto.class))
+				.toList();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<FluctuationRankDto> getFluctuationRankByDateTimeAndRankStatus(String rankStatus) {
+		List<FluctuationRank> fluctuationRanks = fluctuationRankRepository.findByRankStatus(
+				rankStatus);
+
+		if (fluctuationRanks.isEmpty()) {
+			throw new CustomException(BaseResponseCode.FLUCTUATION_RANK_NOT_FOUND);
+		}
+
+		return fluctuationRanks.stream()
+				.map(fluctuationRank -> modelMapper.map(fluctuationRank, FluctuationRankDto.class))
 				.toList();
 	}
 }
