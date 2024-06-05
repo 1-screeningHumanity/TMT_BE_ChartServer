@@ -23,6 +23,7 @@ public class KisApiServiceImp implements KisApiService {
 	private final RestTemplate restTemplate;
 	private final ObjectMapper objectMapper;
 	private final RedisTemplate<String, String> redisTemplate;
+	private static final Long ONE_HOUR_TO_SECONDS = 3600L;
 
 	@Value("${kis.realApp.key}")
 	private String appKey;
@@ -58,10 +59,11 @@ public class KisApiServiceImp implements KisApiService {
 		KisAccessToken kisAccessToken = objectMapper.readValue(response.getBody(),
 				KisAccessToken.class);
 
-		// 토큰 시간(86400초) 지정 후 Redis 에 토큰 저장
+		// 토큰 시간(86400초 - 3600초(1시간)) 지정 후 Redis 에 토큰 저장
 		redisTemplate.opsForValue()
 				.set("kisAccessToken", objectMapper.writeValueAsString(kisAccessToken),
-						Long.parseLong(kisAccessToken.getExpires_in()), TimeUnit.SECONDS);
+						Long.parseLong(kisAccessToken.getExpires_in()) - ONE_HOUR_TO_SECONDS,
+						TimeUnit.SECONDS);
 
 		return kisAccessToken;
 	}
