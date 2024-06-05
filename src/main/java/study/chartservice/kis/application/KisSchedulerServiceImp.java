@@ -336,7 +336,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 				.queryParam("FID_COND_SCR_DIV_CODE", "20170")
 				.queryParam("FID_INPUT_ISCD", "0000")
 				.queryParam("FID_INPUT_CNT_1", "")
-				.queryParam("FID_PRC_CLS_CODE", "")
+				.queryParam("FID_PRC_CLS_CODE", "1")
 				.queryParam("FID_INPUT_PRICE_1", "")
 				.queryParam("FID_INPUT_PRICE_2", "")
 				.queryParam("FID_VOL_CNT", "")
