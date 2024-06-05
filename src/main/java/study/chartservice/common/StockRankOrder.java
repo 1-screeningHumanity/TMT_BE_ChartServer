@@ -4,8 +4,8 @@ import lombok.Getter;
 
 @Getter
 public enum StockRankOrder {
-	INCREASE("0"),
-	DECREASE("1");
+	INCREASE("2"),
+	DECREASE("3");
 
 	private final String value;
 
