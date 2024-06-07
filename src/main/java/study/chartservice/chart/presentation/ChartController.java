@@ -9,10 +9,12 @@ import org.springframework.web.bind.annotation.RestController;
 import study.chartservice.chart.application.ChartService;
 import study.chartservice.chart.application.CompanyInfoService;
 import study.chartservice.chart.dto.resp.FluctuationRankDto;
+import study.chartservice.chart.dto.resp.IndexOfStockDto;
 import study.chartservice.chart.dto.resp.InvestorDto;
 import study.chartservice.chart.dto.resp.StockDto;
 import study.chartservice.chart.dto.resp.StockMinDto;
 import study.chartservice.chart.vo.resp.StockNameVo;
+import study.chartservice.common.StockIndex;
 import study.chartservice.common.StockRankOrder;
 import study.chartservice.global.common.response.BaseResponse;
 
@@ -86,5 +88,15 @@ public class ChartController {
 	public BaseResponse<List<FluctuationRankDto>> getFluctuationRankByIncrease() {
 		return new BaseResponse<>(chartService.getFluctuationRankByDateTimeAndRankStatus(
 				StockRankOrder.INCREASE.name()));
+	}
+
+	@GetMapping("/mainpage/kospi")
+	public BaseResponse<IndexOfStockDto> getStockIndexKopsi() {
+		return new BaseResponse<>(chartService.getIndexOfStockByIscd(StockIndex.KOSPI));
+	}
+
+	@GetMapping("/mainpage/kosdaq")
+	public BaseResponse<IndexOfStockDto> getStockIndexKosdaq() {
+		return new BaseResponse<>(chartService.getIndexOfStockByIscd(StockIndex.KOSDAQ));
 	}
 }

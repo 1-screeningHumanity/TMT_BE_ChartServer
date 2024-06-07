@@ -8,6 +8,6 @@ public interface KisSchedulerService {
 	void collectKisDataOfYear();
 	void collectInvestor();
 	void collectFluctuationRank();
-
+	void collectKisDataOfIndex();
 
 }

@@ -7,19 +7,23 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import study.chartservice.chart.domain.FluctuationRank;
+import study.chartservice.chart.domain.IndexOfStock;
 import study.chartservice.chart.domain.Investor;
 import study.chartservice.chart.domain.MinOfStock;
 import study.chartservice.chart.dto.resp.FluctuationRankDto;
+import study.chartservice.chart.dto.resp.IndexOfStockDto;
 import study.chartservice.chart.dto.resp.InvestorDto;
 import study.chartservice.chart.dto.resp.StockDto;
 import study.chartservice.chart.dto.resp.StockMinDto;
 import study.chartservice.chart.infrastructure.DayOfStockRepository;
 import study.chartservice.chart.infrastructure.FluctuationRankRepository;
+import study.chartservice.chart.infrastructure.IndexOfStockRepository;
 import study.chartservice.chart.infrastructure.InvestorRepository;
 import study.chartservice.chart.infrastructure.MinOfStockRepository;
 import study.chartservice.chart.infrastructure.MonthOfStockRepository;
 import study.chartservice.chart.infrastructure.WeekOfStockRepository;
 import study.chartservice.chart.infrastructure.YearOfStockRepository;
+import study.chartservice.common.StockIndex;
 import study.chartservice.global.common.exception.CustomException;
 import study.chartservice.global.common.response.BaseResponseCode;
 
@@ -35,6 +39,7 @@ public class ChartServiceImp implements ChartService {
 	private final YearOfStockRepository yearOfStockRepository;
 	private final InvestorRepository investorRepository;
 	private final FluctuationRankRepository fluctuationRankRepository;
+	private final IndexOfStockRepository indexOfStockRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -105,5 +110,14 @@ public class ChartServiceImp implements ChartService {
 		return fluctuationRanks.stream()
 				.map(fluctuationRank -> modelMapper.map(fluctuationRank, FluctuationRankDto.class))
 				.toList();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public IndexOfStockDto getIndexOfStockByIscd(StockIndex stockIndex) {
+		IndexOfStock indexOfStock = indexOfStockRepository.findByIscd(stockIndex.name())
+				.orElseThrow(() -> new CustomException(BaseResponseCode.STOCK_INDEX_NOT_FOUND));
+
+		return modelMapper.map(indexOfStock, IndexOfStockDto.class);
 	}
 }
