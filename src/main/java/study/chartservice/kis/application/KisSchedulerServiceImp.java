@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
@@ -26,6 +27,7 @@ import study.chartservice.chart.domain.CompanyInfo;
 import study.chartservice.chart.domain.DayOfStock;
 import study.chartservice.chart.domain.FluctuationRank;
 import study.chartservice.chart.domain.Investor;
+import study.chartservice.chart.domain.MinOfStock;
 import study.chartservice.chart.domain.MonthOfStock;
 import study.chartservice.chart.domain.WeekOfStock;
 import study.chartservice.chart.domain.YearOfStock;
@@ -33,6 +35,7 @@ import study.chartservice.chart.infrastructure.CompanyInfoRepository;
 import study.chartservice.chart.infrastructure.DayOfStockRepository;
 import study.chartservice.chart.infrastructure.FluctuationRankRepository;
 import study.chartservice.chart.infrastructure.InvestorRepository;
+import study.chartservice.chart.infrastructure.MinOfStockRepository;
 import study.chartservice.chart.infrastructure.MonthOfStockRepository;
 import study.chartservice.chart.infrastructure.WeekOfStockRepository;
 import study.chartservice.chart.infrastructure.YearOfStockRepository;
@@ -41,6 +44,7 @@ import study.chartservice.common.StockRankOrder;
 import study.chartservice.kis.dto.resp.FluctuationRankDataDto;
 import study.chartservice.kis.dto.resp.InvestorDataDto;
 import study.chartservice.kis.dto.resp.StockDataDto;
+import study.chartservice.kis.dto.resp.StockTimeDataDto;
 
 @Service
 @RequiredArgsConstructor
@@ -62,12 +66,69 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	private final YearOfStockRepository yearOfStockRepository;
 	private final InvestorRepository investorRepository;
 	private final FluctuationRankRepository fluctuationRankRepository;
+	private final MinOfStockRepository minOfStockRepository;
 
 	@Value("${kis.realApp.key}")
 	private String appKey;
 
 	@Value("${kis.realApp.secret}")
 	private String appSecret;
+
+
+	@Override
+	@Transactional
+	@Scheduled(cron = "0 0/30 9-15 * * MON-FRI")    // 9~16시 사이에 30분마다 호출
+	public void collectKisDatOfTime() {
+		log.info("collectKisDatOfTime 스케줄러 실행");
+		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
+		String requestDateTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmm00"));
+
+		List<String> idList = minOfStockRepository.findIdsAll();
+
+		companyInfos.forEach(companyInfo -> {
+			UriComponentsBuilder chartTimeUriBuilder = createChartTimeUriBuilder();
+			chartTimeUriBuilder
+					.queryParam("FID_INPUT_ISCD", companyInfo.getStockCode())
+					.queryParam("FID_INPUT_HOUR_1", requestDateTime);
+
+			try {
+				// 한국 투자 증권 API 호출하여 하나의 종목 당 분봉 30개 중 제일 최신 데이터만 저장
+				List<StockTimeDataDto> stockTimeDataDtos = fetchAndExtractChartTimeData(
+						chartTimeUriBuilder);
+
+				if (stockTimeDataDtos.isEmpty()) {
+					Thread.sleep(50);
+					return;
+				}
+				StockTimeDataDto stockTimeDataDto = stockTimeDataDtos.get(0);
+
+				MinOfStock minOfStock = MinOfStock.builder()
+						.stockCode(companyInfo.getStockCode())
+						.stck_bsop_date(stockTimeDataDto.getStck_bsop_date())
+						.stck_cntg_hour(stockTimeDataDto.getStck_cntg_hour())
+						.acml_tr_pbmn(stockTimeDataDto.getAcml_tr_pbmn())
+						.stck_prpr(stockTimeDataDto.getStck_prpr())
+						.stck_oprc(stockTimeDataDto.getStck_oprc())
+						.stck_hgpr(stockTimeDataDto.getStck_hgpr())
+						.stck_lwpr(stockTimeDataDto.getStck_lwpr())
+						.cntg_vol(stockTimeDataDto.getCntg_vol())
+						.build();
+
+				minOfStockRepository.save(minOfStock);
+
+				Thread.sleep(50);
+			} catch (JsonProcessingException | InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		});
+
+		List<String> ids = idList.stream()
+				.map(KisSchedulerServiceImp::parseObjectId)
+				.toList();
+
+		minOfStockRepository.deleteAllById(ids);
+		log.info("collectKisDatOfTime 스케줄러 종료");
+	}
 
 
 	@Override
@@ -86,6 +147,8 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 			try {
 				List<DayOfStock> dayOfStocks = fetchAndExtractStockData(uriComponentsBuilder)
 						.stream()
+						.filter(data -> data.getStck_bsop_date() != null) // 데이터가 없는 경우 제외
+						.filter(data -> data.getStck_bsop_date().equals(nowDate))
 						.map(data -> DayOfStock.builder()
 								.stockCode(companyInfo.getStockCode())
 								.stck_bsop_date(data.getStck_bsop_date())
@@ -138,6 +201,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 			try {
 				List<WeekOfStock> weekOfStocks = fetchAndExtractStockData(uriComponentsBuilder)
 						.stream()
+						.filter(data -> data.getStck_bsop_date() != null) // 데이터가 없는 경우 제외
 						.map(data -> WeekOfStock.builder()
 								.stockCode(companyInfo.getStockCode())
 								.stck_bsop_date(data.getStck_bsop_date())
@@ -183,6 +247,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 			try {
 				List<MonthOfStock> monthOfStocks = fetchAndExtractStockData(uriComponentsBuilder)
 						.stream()
+						.filter(data -> data.getStck_bsop_date() != null) // 데이터가 없는 경우 제외
 						.map(data -> MonthOfStock.builder()
 								.stockCode(companyInfo.getStockCode())
 								.stck_bsop_date(data.getStck_bsop_date())
@@ -225,6 +290,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 			try {
 				List<YearOfStock> yearOfStocks = fetchAndExtractStockData(uriComponentsBuilder)
 						.stream()
+						.filter(data -> data.getStck_bsop_date() != null) // 데이터가 없는 경우 제외
 						.map(data -> YearOfStock.builder()
 								.stockCode(companyInfo.getStockCode())
 								.stck_bsop_date(data.getStck_bsop_date())
@@ -292,7 +358,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
-	@Scheduled(cron = "0 0/20 9-15 * * MON-FRI")
+	@Scheduled(cron = "0 0/20 9-15 * * MON-FRI")    // 9~16시 사이에 20분마다 호출
 	public void collectFluctuationRank() {
 		log.info("collectFluctuationRank 스케줄러 실행");
 
@@ -328,6 +394,13 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		log.info("collectFluctuationRank 스케줄러 종료");
 	}
 
+	private UriComponentsBuilder createChartTimeUriBuilder() {
+		return UriComponentsBuilder.fromUriString(KisUrls.ITEM_CHART_PRICE_TIME_PATH.getFullUrl())
+				.queryParam("FID_ETC_CLS_CODE", "")
+				.queryParam("FID_COND_MRKT_DIV_CODE", "J")
+				.queryParam("FID_PW_DATA_INCU_YN", "N");
+	}
+
 	private UriComponentsBuilder createFluctuationRankUriBuilder() {
 		return UriComponentsBuilder.fromHttpUrl(
 						KisUrls.STOCK_FLUCTUATION_RANK_PATH.getFullUrl())
@@ -358,6 +431,18 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 				.queryParam("FID_INPUT_DATE_1", startDate)
 				.queryParam("FID_INPUT_DATE_2", endDate)
 				.queryParam("FID_ORG_ADJ_PRC", "0");
+	}
+
+	private HttpHeaders createChartTimeHeaders() throws JsonProcessingException {
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		headers.set("authorization",
+				"Bearer " + kisApiService.getKisAccessToken().getAccess_token());
+		headers.set("appkey", appKey);
+		headers.set("appsecret", appSecret);
+		headers.set("tr_id", "FHKST03010200");
+		headers.set("custtype", "P");
+		return headers;
 	}
 
 	private HttpHeaders createFluctuationRankHeaders() throws JsonProcessingException {
@@ -412,6 +497,22 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		return objectMapper.convertValue(jsonNode.path("output"), new TypeReference<>() {
 		});
 	}
+
+	private List<StockTimeDataDto> fetchAndExtractChartTimeData(UriComponentsBuilder builder)
+			throws JsonProcessingException {
+		// 한국 투자 증권 API 호출
+		ResponseEntity<String> response = restTemplate.exchange(
+				builder.toUriString(),
+				HttpMethod.GET,
+				new HttpEntity<>(createChartTimeHeaders()),
+				String.class);
+
+		// API 응답 데이터 JSON 파싱
+		JsonNode jsonNode = objectMapper.readTree(response.getBody());
+		return objectMapper.convertValue(jsonNode.path("output2"), new TypeReference<>() {
+		});
+	}
+
 	// 주식 데이터 추출
 
 	private List<StockDataDto> fetchAndExtractStockData(UriComponentsBuilder builder)
@@ -452,5 +553,17 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		return LocalDate.parse(date, formatter)
 				.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 				.format(formatter);
+	}
+
+	// Mongodb id -> ObjectId 추출
+	private static String parseObjectId(String objectId) {
+		// ObjectId의 시작 위치를 찾음
+		int startIndex = objectId.indexOf("\"$oid\": \"") + 9;
+
+		// ObjectId의 끝 위치를 찾음
+		int endIndex = objectId.indexOf("\"", startIndex);
+
+		// ObjectId를 추출
+		return objectId.substring(startIndex, endIndex);
 	}
 }

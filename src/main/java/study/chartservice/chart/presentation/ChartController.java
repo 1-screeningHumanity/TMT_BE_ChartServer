@@ -11,6 +11,7 @@ import study.chartservice.chart.application.CompanyInfoService;
 import study.chartservice.chart.dto.resp.FluctuationRankDto;
 import study.chartservice.chart.dto.resp.InvestorDto;
 import study.chartservice.chart.dto.resp.StockDto;
+import study.chartservice.chart.dto.resp.StockMinDto;
 import study.chartservice.chart.vo.resp.StockNameVo;
 import study.chartservice.common.StockRankOrder;
 import study.chartservice.global.common.response.BaseResponse;
@@ -31,6 +32,13 @@ public class ChartController {
 		return new BaseResponse<>(
 				modelMapper.map(companyInfoService.getCompanyNameByStockCode(stockCode),
 						StockNameVo.class));
+	}
+
+	@GetMapping("/chart/{stockCode}/price")
+	public BaseResponse<StockMinDto> getChartOfMinByStockCode(
+			@PathVariable("stockCode") String stockCode
+	) {
+		return new BaseResponse<>(chartService.getChartOfMinByStockCode(stockCode));
 	}
 
 	@GetMapping("/chart/{stockCode}/day")
