@@ -322,7 +322,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
-	@Scheduled(cron = "0 0 7 * * MON-FRI")    // 평일 7시 호출
+	@Scheduled(cron = "0 50 10 * * MON-FRI")    // 평일 7시 호출
 	public void collectInvestor() {
 		log.info("collectInvestor 스케줄러 실행");
 
