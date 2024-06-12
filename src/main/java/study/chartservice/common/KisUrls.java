@@ -10,7 +10,8 @@ public enum KisUrls {
 	ITEM_CHART_PRICE_TIME_PATH("/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice"),
 	STOCK_PRICE_INVESTOR_PATH("/uapi/domestic-stock/v1/quotations/inquire-investor"),
 	STOCK_FLUCTUATION_RANK_PATH("/uapi/domestic-stock/v1/ranking/fluctuation"),
-	STOCK_PRICE_INDEX_PATH("/uapi/domestic-stock/v1/quotations/inquire-index-price");
+	STOCK_PRICE_INDEX_PATH("/uapi/domestic-stock/v1/quotations/inquire-index-price"),
+	STOCK_ASKING_PRICE_PATH("/uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn");
 
 	private final String path;
 
