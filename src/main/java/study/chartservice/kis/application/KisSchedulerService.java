@@ -9,5 +9,5 @@ public interface KisSchedulerService {
 	void collectInvestor();
 	void collectFluctuationRank();
 	void collectKisDataOfIndex();
-
+	void collectStockAskingPrice();
 }
