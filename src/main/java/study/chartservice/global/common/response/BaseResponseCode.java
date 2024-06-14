@@ -41,7 +41,8 @@ public enum BaseResponseCode {
 	INVESTOR_NOT_FOUND(HttpStatus.BAD_REQUEST, false, 6001, "투자자 비율 조회 실패"),
 	FLUCTUATION_RANK_NOT_FOUND(HttpStatus.BAD_REQUEST, false, 6002, "등락률 순위 조회 실패"),
 	MIN_OF_STOCK_NOT_FOUND(HttpStatus.BAD_REQUEST, false, 6003, "분봉 조회 실패"),
-	STOCK_INDEX_NOT_FOUND(HttpStatus.BAD_REQUEST, false, 6004, "주식 지수 조회 실패");
+	STOCK_INDEX_NOT_FOUND(HttpStatus.BAD_REQUEST, false, 6004, "주식 지수 조회 실패"),
+	STOCK_ASKING_PRICE_NOT_FOUND(HttpStatus.BAD_REQUEST, false, 6005, "주식 호가 조회 실패");
 
 	private final HttpStatus httpStatus;
 	private final boolean isSuccess;
