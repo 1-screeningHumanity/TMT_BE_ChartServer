@@ -87,8 +87,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
-//	@Scheduled(cron = "0 0/30 9-15 * * MON-FRI")    // 9~16시 사이에 30분마다 호출
-	@Scheduled(cron = "0 12 14 * * MON-FRI")    // 9~16시 사이에 30분마다 호출
+	@Scheduled(cron = "0 0/30 9-15 * * MON-FRI")    // 9~16시 사이에 30분마다 호출
 	public void collectKisDatOfTime() {
 		log.info("collectKisDatOfTime 스케줄러 실행");
 		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
