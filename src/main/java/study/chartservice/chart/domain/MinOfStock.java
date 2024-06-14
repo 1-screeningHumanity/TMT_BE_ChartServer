@@ -11,28 +11,30 @@ public class MinOfStock {
 	@Id
 	private String id;
 	private String stockCode; // 주식 코드
-	private String stck_bsop_date; // 주식 영업 일자
-	private String stck_cntg_hour; // 주식 체결 시간
-	private String acml_tr_pbmn; // 누적 거래 대금
-	private String stck_prpr; // 주식 현재가
-	private String stck_oprc;   // 주식 시가2
-	private String stck_hgpr; // 주식 최고가
-	private String stck_lwpr; // 주식 최저가
-	private String cntg_vol; // 체결 거래량
+	private String stockCreatAt; // 주식 영업 일자
+	private String prdy_vrss;   // 	전일 대비
+	private String prdy_vrss_sign;  //  전일 대비 부호
+	private String prdy_ctrt;   // 전일 대비율
+	private String stck_prdy_clpr;  //  주식 전일 종가
+	private String acml_vol;    // 누적 거래량
+	private String acml_tr_pbmn;    //  누적 거래 대금
+	private String hts_kor_isnm;    // HTS 한글 종목명
+	private String stck_prpr;   // 주식 현재가
+
 
 	@Builder
-	public MinOfStock(String stockCode, String stck_bsop_date, String stck_cntg_hour,
-			String acml_tr_pbmn, String stck_prpr, String stck_oprc, String stck_hgpr,
-			String stck_lwpr,
-			String cntg_vol) {
+	public MinOfStock(String stockCode, String stockCreatAt, String prdy_vrss,
+			String prdy_vrss_sign, String prdy_ctrt, String stck_prdy_clpr, String acml_vol,
+			String acml_tr_pbmn, String hts_kor_isnm, String stck_prpr) {
 		this.stockCode = stockCode;
-		this.stck_bsop_date = stck_bsop_date;
-		this.stck_cntg_hour = stck_cntg_hour;
+		this.stockCreatAt = stockCreatAt;
+		this.prdy_vrss = prdy_vrss;
+		this.prdy_vrss_sign = prdy_vrss_sign;
+		this.prdy_ctrt = prdy_ctrt;
+		this.stck_prdy_clpr = stck_prdy_clpr;
+		this.acml_vol = acml_vol;
 		this.acml_tr_pbmn = acml_tr_pbmn;
+		this.hts_kor_isnm = hts_kor_isnm;
 		this.stck_prpr = stck_prpr;
-		this.stck_oprc = stck_oprc;
-		this.stck_hgpr = stck_hgpr;
-		this.stck_lwpr = stck_lwpr;
-		this.cntg_vol = cntg_vol;
 	}
 }

@@ -63,6 +63,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	private static final String MONTH = "M";
 	private static final String YEAR = "Y";
 	private static final Integer LAST_DAY = 1;
+	private static final Integer TIME_SPLIT = 8;
 	private final RestTemplate restTemplate;
 	private final ObjectMapper objectMapper;
 	private final KisApiService kisApiService;
@@ -90,7 +91,8 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	public void collectKisDatOfTime() {
 		log.info("collectKisDatOfTime 스케줄러 실행");
 		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
-		String requestDateTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmm00"));
+		String minOfStockCreatAt = LocalDateTime.now()
+				.format(DateTimeFormatter.ofPattern("yyyyMMddHHmm00"));
 
 		List<String> idList = minOfStockRepository.findIdsAll();
 
@@ -98,29 +100,29 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 			UriComponentsBuilder chartTimeUriBuilder = createChartTimeUriBuilder();
 			chartTimeUriBuilder
 					.queryParam("FID_INPUT_ISCD", companyInfo.getStockCode())
-					.queryParam("FID_INPUT_HOUR_1", requestDateTime);
+					.queryParam("FID_INPUT_HOUR_1", minOfStockCreatAt.substring(TIME_SPLIT));
 
 			try {
 				// 한국 투자 증권 API 호출하여 하나의 종목 당 분봉 30개 중 제일 최신 데이터만 저장
-				List<StockTimeDataDto> stockTimeDataDtos = fetchAndExtractChartTimeData(
+				StockTimeDataDto stockTimeDataDto = fetchAndExtractChartTimeData(
 						chartTimeUriBuilder);
 
-				if (stockTimeDataDtos.isEmpty()) {
+				if (stockTimeDataDto == null) {
 					Thread.sleep(50);
 					return;
 				}
-				StockTimeDataDto stockTimeDataDto = stockTimeDataDtos.get(0);
 
 				MinOfStock minOfStock = MinOfStock.builder()
 						.stockCode(companyInfo.getStockCode())
-						.stck_bsop_date(stockTimeDataDto.getStck_bsop_date())
-						.stck_cntg_hour(stockTimeDataDto.getStck_cntg_hour())
+						.stockCreatAt(minOfStockCreatAt)
+						.prdy_vrss(stockTimeDataDto.getPrdy_vrss())
+						.prdy_vrss_sign(stockTimeDataDto.getPrdy_vrss_sign())
+						.prdy_ctrt(stockTimeDataDto.getPrdy_ctrt())
+						.stck_prdy_clpr(stockTimeDataDto.getStck_prdy_clpr())
+						.acml_vol(stockTimeDataDto.getAcml_vol())
 						.acml_tr_pbmn(stockTimeDataDto.getAcml_tr_pbmn())
+						.hts_kor_isnm(stockTimeDataDto.getHts_kor_isnm())
 						.stck_prpr(stockTimeDataDto.getStck_prpr())
-						.stck_oprc(stockTimeDataDto.getStck_oprc())
-						.stck_hgpr(stockTimeDataDto.getStck_hgpr())
-						.stck_lwpr(stockTimeDataDto.getStck_lwpr())
-						.cntg_vol(stockTimeDataDto.getCntg_vol())
 						.build();
 
 				minOfStockRepository.save(minOfStock);
@@ -476,7 +478,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 						.build());
 
 				Thread.sleep(50);
-			} catch (JsonProcessingException | InterruptedException e ) {
+			} catch (JsonProcessingException | InterruptedException e) {
 				throw new RuntimeException(e);
 			}
 		});
@@ -658,7 +660,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		});
 	}
 
-	private List<StockTimeDataDto> fetchAndExtractChartTimeData(UriComponentsBuilder builder)
+	private StockTimeDataDto fetchAndExtractChartTimeData(UriComponentsBuilder builder)
 			throws JsonProcessingException {
 		// 한국 투자 증권 API 호출
 		ResponseEntity<String> response = restTemplate.exchange(
@@ -669,7 +671,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 		// API 응답 데이터 JSON 파싱
 		JsonNode jsonNode = objectMapper.readTree(response.getBody());
-		return objectMapper.convertValue(jsonNode.path("output2"), new TypeReference<>() {
+		return objectMapper.convertValue(jsonNode.path("output1"), new TypeReference<>() {
 		});
 	}
 
