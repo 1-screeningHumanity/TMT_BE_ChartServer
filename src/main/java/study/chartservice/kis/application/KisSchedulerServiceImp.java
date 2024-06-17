@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import study.chartservice.chart.application.KafkaProducerService;
 import study.chartservice.chart.domain.CompanyInfo;
 import study.chartservice.chart.domain.DayOfStock;
 import study.chartservice.chart.domain.FluctuationRank;
@@ -67,6 +68,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	private final RestTemplate restTemplate;
 	private final ObjectMapper objectMapper;
 	private final KisApiService kisApiService;
+	private final KafkaProducerService kafkaProducerService;
 	private final CompanyInfoRepository companyInfoRepository;
 	private final DayOfStockRepository dayOfStockRepository;
 	private final WeekOfStockRepository weekOfStockRepository;
@@ -111,6 +113,12 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 					Thread.sleep(50);
 					return;
 				}
+
+				kafkaProducerService.sendTrade("{\n"
+						+ "  \"stockCode\":\"" + companyInfo.getStockCode() + "\",\n"
+						+ "  \"price\":\"" + stockTimeDataDto.getStck_prpr() + "\",\n"
+						+ "  \"date\":\"" + LocalDateTime.now().toString() + "\"\n"
+						+ "}");
 
 				MinOfStock minOfStock = MinOfStock.builder()
 						.stockCode(companyInfo.getStockCode())
