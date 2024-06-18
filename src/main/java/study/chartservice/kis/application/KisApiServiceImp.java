@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
@@ -16,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 import study.chartservice.common.KisUrls;
 import study.chartservice.kis.domain.KisAccessToken;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class KisApiServiceImp implements KisApiService {
@@ -33,7 +35,11 @@ public class KisApiServiceImp implements KisApiService {
 
 	@Override
 	public KisAccessToken getKisAccessToken() throws JsonProcessingException {
+		log.info("토큰 테스트");
 		String token = redisTemplate.opsForValue().get("kisAccessToken");
+
+		log.info("token: {}", token);
+		log.info("token status: {}", token == null);
 
 		return token == null ? createKisAccessToken() : objectMapper.readValue(
 				token, KisAccessToken.class);
