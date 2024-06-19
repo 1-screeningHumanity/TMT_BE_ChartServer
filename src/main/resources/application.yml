@@ -8,6 +8,7 @@ spring:
     redis:
       host: ${REDIS_DB}
       port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
 
 server:
   port: 0
