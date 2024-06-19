@@ -10,9 +10,11 @@ import study.chartservice.chart.domain.FluctuationRank;
 import study.chartservice.chart.domain.IndexOfStock;
 import study.chartservice.chart.domain.Investor;
 import study.chartservice.chart.domain.MinOfStock;
+import study.chartservice.chart.domain.StockAskingPrice;
 import study.chartservice.chart.dto.resp.FluctuationRankDto;
 import study.chartservice.chart.dto.resp.IndexOfStockDto;
 import study.chartservice.chart.dto.resp.InvestorDto;
+import study.chartservice.chart.dto.resp.StockAskingPriceDto;
 import study.chartservice.chart.dto.resp.StockDto;
 import study.chartservice.chart.dto.resp.StockMinDto;
 import study.chartservice.chart.infrastructure.DayOfStockRepository;
@@ -21,6 +23,7 @@ import study.chartservice.chart.infrastructure.IndexOfStockRepository;
 import study.chartservice.chart.infrastructure.InvestorRepository;
 import study.chartservice.chart.infrastructure.MinOfStockRepository;
 import study.chartservice.chart.infrastructure.MonthOfStockRepository;
+import study.chartservice.chart.infrastructure.StockAskingPriceRepository;
 import study.chartservice.chart.infrastructure.WeekOfStockRepository;
 import study.chartservice.chart.infrastructure.YearOfStockRepository;
 import study.chartservice.common.StockIndex;
@@ -40,6 +43,7 @@ public class ChartServiceImp implements ChartService {
 	private final InvestorRepository investorRepository;
 	private final FluctuationRankRepository fluctuationRankRepository;
 	private final IndexOfStockRepository indexOfStockRepository;
+	private final StockAskingPriceRepository stockAskingPriceRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -119,5 +123,14 @@ public class ChartServiceImp implements ChartService {
 				.orElseThrow(() -> new CustomException(BaseResponseCode.STOCK_INDEX_NOT_FOUND));
 
 		return modelMapper.map(indexOfStock, IndexOfStockDto.class);
+	}
+
+	@Override
+	public StockAskingPriceDto getStockAskingPriceByStockCode(String stockCode) {
+		StockAskingPrice stockAskingPrice = stockAskingPriceRepository.findByStockCode(stockCode)
+				.orElseThrow(
+						() -> new CustomException(BaseResponseCode.STOCK_ASKING_PRICE_NOT_FOUND));
+
+		return modelMapper.map(stockAskingPrice, StockAskingPriceDto.class);
 	}
 }

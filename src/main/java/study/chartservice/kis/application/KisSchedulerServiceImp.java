@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import study.chartservice.chart.application.KafkaProducerService;
 import study.chartservice.chart.domain.CompanyInfo;
 import study.chartservice.chart.domain.DayOfStock;
 import study.chartservice.chart.domain.FluctuationRank;
@@ -30,6 +31,7 @@ import study.chartservice.chart.domain.IndexOfStock;
 import study.chartservice.chart.domain.Investor;
 import study.chartservice.chart.domain.MinOfStock;
 import study.chartservice.chart.domain.MonthOfStock;
+import study.chartservice.chart.domain.StockAskingPrice;
 import study.chartservice.chart.domain.WeekOfStock;
 import study.chartservice.chart.domain.YearOfStock;
 import study.chartservice.chart.infrastructure.CompanyInfoRepository;
@@ -39,6 +41,7 @@ import study.chartservice.chart.infrastructure.IndexOfStockRepository;
 import study.chartservice.chart.infrastructure.InvestorRepository;
 import study.chartservice.chart.infrastructure.MinOfStockRepository;
 import study.chartservice.chart.infrastructure.MonthOfStockRepository;
+import study.chartservice.chart.infrastructure.StockAskingPriceRepository;
 import study.chartservice.chart.infrastructure.WeekOfStockRepository;
 import study.chartservice.chart.infrastructure.YearOfStockRepository;
 import study.chartservice.common.KisUrls;
@@ -47,6 +50,7 @@ import study.chartservice.common.StockRankOrder;
 import study.chartservice.kis.dto.resp.FluctuationRankDataDto;
 import study.chartservice.kis.dto.resp.IndexDataDto;
 import study.chartservice.kis.dto.resp.InvestorDataDto;
+import study.chartservice.kis.dto.resp.StockAskingPriceDataDto;
 import study.chartservice.kis.dto.resp.StockDataDto;
 import study.chartservice.kis.dto.resp.StockTimeDataDto;
 
@@ -60,9 +64,11 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	private static final String MONTH = "M";
 	private static final String YEAR = "Y";
 	private static final Integer LAST_DAY = 1;
+	private static final Integer TIME_SPLIT = 8;
 	private final RestTemplate restTemplate;
 	private final ObjectMapper objectMapper;
 	private final KisApiService kisApiService;
+	private final KafkaProducerService kafkaProducerService;
 	private final CompanyInfoRepository companyInfoRepository;
 	private final DayOfStockRepository dayOfStockRepository;
 	private final WeekOfStockRepository weekOfStockRepository;
@@ -72,6 +78,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	private final FluctuationRankRepository fluctuationRankRepository;
 	private final MinOfStockRepository minOfStockRepository;
 	private final IndexOfStockRepository indexOfStockRepository;
+	private final StockAskingPriceRepository stockAskingPriceRepository;
 
 	@Value("${kis.realApp.key}")
 	private String appKey;
@@ -86,37 +93,48 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	public void collectKisDatOfTime() {
 		log.info("collectKisDatOfTime 스케줄러 실행");
 		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
-		String requestDateTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmm00"));
+		String minOfStockCreatAt = LocalDateTime.now()
+				.format(DateTimeFormatter.ofPattern("yyyyMMddHHmm00"));
 
 		List<String> idList = minOfStockRepository.findIdsAll();
+
+		String kisAccessToken = kisApiService.getKisAccessToken().getAccess_token();
+		HttpHeaders chartTimeHeaders = createChartTimeHeaders(kisAccessToken);
 
 		companyInfos.forEach(companyInfo -> {
 			UriComponentsBuilder chartTimeUriBuilder = createChartTimeUriBuilder();
 			chartTimeUriBuilder
 					.queryParam("FID_INPUT_ISCD", companyInfo.getStockCode())
-					.queryParam("FID_INPUT_HOUR_1", requestDateTime);
+					.queryParam("FID_INPUT_HOUR_1", minOfStockCreatAt.substring(TIME_SPLIT));
 
 			try {
 				// 한국 투자 증권 API 호출하여 하나의 종목 당 분봉 30개 중 제일 최신 데이터만 저장
-				List<StockTimeDataDto> stockTimeDataDtos = fetchAndExtractChartTimeData(
-						chartTimeUriBuilder);
+				StockTimeDataDto stockTimeDataDto = fetchAndExtractChartTimeData(
+						chartTimeUriBuilder,
+						chartTimeHeaders);
 
-				if (stockTimeDataDtos.isEmpty()) {
+				if (stockTimeDataDto == null) {
 					Thread.sleep(50);
 					return;
 				}
-				StockTimeDataDto stockTimeDataDto = stockTimeDataDtos.get(0);
+
+				kafkaProducerService.sendTrade("{\n"
+						+ "  \"stockCode\":\"" + companyInfo.getStockCode() + "\",\n"
+						+ "  \"price\":\"" + stockTimeDataDto.getStck_prpr() + "\",\n"
+						+ "  \"date\":\"" + LocalDateTime.now().toString() + "\"\n"
+						+ "}");
 
 				MinOfStock minOfStock = MinOfStock.builder()
 						.stockCode(companyInfo.getStockCode())
-						.stck_bsop_date(stockTimeDataDto.getStck_bsop_date())
-						.stck_cntg_hour(stockTimeDataDto.getStck_cntg_hour())
+						.stockCreatAt(minOfStockCreatAt)
+						.prdy_vrss(stockTimeDataDto.getPrdy_vrss())
+						.prdy_vrss_sign(stockTimeDataDto.getPrdy_vrss_sign())
+						.prdy_ctrt(stockTimeDataDto.getPrdy_ctrt())
+						.stck_prdy_clpr(stockTimeDataDto.getStck_prdy_clpr())
+						.acml_vol(stockTimeDataDto.getAcml_vol())
 						.acml_tr_pbmn(stockTimeDataDto.getAcml_tr_pbmn())
+						.hts_kor_isnm(stockTimeDataDto.getHts_kor_isnm())
 						.stck_prpr(stockTimeDataDto.getStck_prpr())
-						.stck_oprc(stockTimeDataDto.getStck_oprc())
-						.stck_hgpr(stockTimeDataDto.getStck_hgpr())
-						.stck_lwpr(stockTimeDataDto.getStck_lwpr())
-						.cntg_vol(stockTimeDataDto.getCntg_vol())
 						.build();
 
 				minOfStockRepository.save(minOfStock);
@@ -144,13 +162,19 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		String nowDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
 
+		String kisAccessToken = kisApiService.getKisAccessToken().getAccess_token();
+		HttpHeaders chartHeaders = createChartHeaders(kisAccessToken);
+
 		companyInfos.forEach(companyInfo -> {
 			UriComponentsBuilder uriComponentsBuilder = createChartUriBuilder(nowDate, nowDate);
 			uriComponentsBuilder.queryParam("FID_INPUT_ISCD", companyInfo.getStockCode());
 			uriComponentsBuilder.queryParam("FID_PERIOD_DIV_CODE", DAY);
 
 			try {
-				List<DayOfStock> dayOfStocks = fetchAndExtractStockData(uriComponentsBuilder)
+				List<DayOfStock> dayOfStocks = fetchAndExtractStockData(
+						uriComponentsBuilder,
+						chartHeaders
+				)
 						.stream()
 						.filter(data -> data.getStck_bsop_date() != null) // 데이터가 없는 경우 제외
 						.filter(data -> data.getStck_bsop_date().equals(nowDate))
@@ -196,7 +220,8 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
 
-		System.out.println("companyInfos = " + companyInfos.size());
+		String kisAccessToken = kisApiService.getKisAccessToken().getAccess_token();
+		HttpHeaders chartHeaders = createChartHeaders(kisAccessToken);
 
 		companyInfos.forEach(companyInfo -> {
 			UriComponentsBuilder uriComponentsBuilder = createChartUriBuilder(weekMonDays, endDate);
@@ -204,7 +229,10 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 			uriComponentsBuilder.queryParam("FID_PERIOD_DIV_CODE", WEEK);
 
 			try {
-				List<WeekOfStock> weekOfStocks = fetchAndExtractStockData(uriComponentsBuilder)
+				List<WeekOfStock> weekOfStocks = fetchAndExtractStockData(
+						uriComponentsBuilder,
+						chartHeaders
+				)
 						.stream()
 						.filter(data -> data.getStck_bsop_date() != null) // 데이터가 없는 경우 제외
 						.map(data -> WeekOfStock.builder()
@@ -242,6 +270,9 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
 
+		String kisAccessToken = kisApiService.getKisAccessToken().getAccess_token();
+		HttpHeaders chartHeaders = createChartHeaders(kisAccessToken);
+
 		companyInfos.forEach(companyInfo -> {
 			UriComponentsBuilder uriComponentsBuilder = createChartUriBuilder(
 					year + String.format("%02d", lastMonth) + "01",
@@ -250,7 +281,10 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 			uriComponentsBuilder.queryParam("FID_PERIOD_DIV_CODE", MONTH);
 
 			try {
-				List<MonthOfStock> monthOfStocks = fetchAndExtractStockData(uriComponentsBuilder)
+				List<MonthOfStock> monthOfStocks = fetchAndExtractStockData(
+						uriComponentsBuilder,
+						chartHeaders
+				)
 						.stream()
 						.filter(data -> data.getStck_bsop_date() != null) // 데이터가 없는 경우 제외
 						.map(data -> MonthOfStock.builder()
@@ -285,6 +319,8 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		int lastYear = LocalDate.now().getYear() - 1;
 
 		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
+		String kisAccessToken = kisApiService.getKisAccessToken().getAccess_token();
+		HttpHeaders chartHeaders = createChartHeaders(kisAccessToken);
 
 		companyInfos.forEach(companyInfo -> {
 			UriComponentsBuilder uriComponentsBuilder = createChartUriBuilder(
@@ -293,7 +329,10 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 			uriComponentsBuilder.queryParam("FID_PERIOD_DIV_CODE", YEAR);
 
 			try {
-				List<YearOfStock> yearOfStocks = fetchAndExtractStockData(uriComponentsBuilder)
+				List<YearOfStock> yearOfStocks = fetchAndExtractStockData(
+						uriComponentsBuilder,
+						chartHeaders
+				)
 						.stream()
 						.filter(data -> data.getStck_bsop_date() != null) // 데이터가 없는 경우 제외
 						.map(data -> YearOfStock.builder()
@@ -328,11 +367,17 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
 
+		String kisAccessToken = kisApiService.getKisAccessToken().getAccess_token();
+		HttpHeaders investorHeaders = createInvestorHeaders(kisAccessToken);
+
 		companyInfos.forEach(companyInfo -> {
-			UriComponentsBuilder builder = createInvestorUriBuilder(companyInfo.getStockCode());
+			UriComponentsBuilder investorUriBuilder = createInvestorUriBuilder(
+					companyInfo.getStockCode());
 
 			try {
-				List<InvestorDataDto> investorDataDtos = fetchAndExtractInvestorData(builder);
+				List<InvestorDataDto> investorDataDtos = fetchAndExtractInvestorData(
+						investorUriBuilder,
+						investorHeaders);
 
 				// 해당 날짜의 지난날 투자자 정보가 없을 경우
 				if (investorDataDtos.size() < 2) {
@@ -367,18 +412,23 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	public void collectFluctuationRank() {
 		log.info("collectFluctuationRank 스케줄러 실행");
 
+		String kisAccessToken = kisApiService.getKisAccessToken().getAccess_token();
+		HttpHeaders fluctuationRankHeaders = createFluctuationRankHeaders(kisAccessToken);
 		// 기존 데이터 삭제 후 새로운 데이터 저장
 		fluctuationRankRepository.deleteAll();
 
 		List.of(StockRankOrder.INCREASE, StockRankOrder.DECREASE).forEach(rankSortClsCode -> {
 			try {
 
-				UriComponentsBuilder builder = createFluctuationRankUriBuilder()
+				UriComponentsBuilder fluctuationRankUriBuilder = createFluctuationRankUriBuilder()
 						.queryParam("FID_RANK_SORT_CLS_CODE", rankSortClsCode.getValue());
 
 				// 한국 투자 증권 API 호출
 				List<FluctuationRank> fluctuationRanks = fetchAndExtractFluctuationRankData(
-						builder).stream()
+						fluctuationRankUriBuilder,
+						fluctuationRankHeaders
+				)
+						.stream()
 						.map(FluctuationRankDataDto -> FluctuationRank.builder()
 								.stockCode(FluctuationRankDataDto.getStck_shrn_iscd())
 								.rankStatus(rankSortClsCode.name())
@@ -408,6 +458,10 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		String nowDateTime = LocalDateTime.now()
 				.format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"));
 
+		String kisAccessToken = kisApiService.getKisAccessToken().getAccess_token();
+		HttpHeaders chartIndexHeaders = createChartIndexHeaders(kisAccessToken);
+
+		// 기존 데이터 삭제 후 새로운 데이터 저장
 		indexOfStockRepository.deleteAll();
 
 		List.of(StockIndex.KOSPI, StockIndex.KOSDAQ).forEach(stockIndex -> {
@@ -415,7 +469,9 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 				UriComponentsBuilder chartIndexUriBuilder = createChartIndexUriBuilder();
 				chartIndexUriBuilder.queryParam("FID_INPUT_ISCD", stockIndex.getValue());
 
-				IndexDataDto indexDataDto = fetchAndExtractIndexData(chartIndexUriBuilder);
+				IndexDataDto indexDataDto = fetchAndExtractIndexData(
+						chartIndexUriBuilder,
+						chartIndexHeaders);
 
 				indexOfStockRepository.save(IndexOfStock.builder()
 						.iscd(stockIndex.name())
@@ -434,6 +490,65 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		log.info("collectKisDataOfIndex 스케쥴러 종료");
 	}
 
+	@Override
+	@Transactional
+	@Scheduled(cron = "0 0/30 9-15 * * MON-FRI")    // 9~16시 사이에 30분마다 호출
+	public void collectStockAskingPrice() {
+		log.info("collectStockAskingPrice 스케쥴러 실행");
+		List<CompanyInfo> companyInfos = companyInfoRepository.findAll();
+		List<String> idList = stockAskingPriceRepository.findIdsAll();
+
+		String kisAccessToken = kisApiService.getKisAccessToken().getAccess_token();
+		HttpHeaders stockAskingPriceHeaders = createStockAskingPriceHeaders(kisAccessToken);
+
+		companyInfos.forEach(companyInfo -> {
+
+			try {
+				UriComponentsBuilder stockAskingPriceUriBuilder = createStockAskingPriceUriBuilder();
+				stockAskingPriceUriBuilder.queryParam("FID_INPUT_ISCD", companyInfo.getStockCode());
+
+				StockAskingPriceDataDto dto = fetchAndExtractStockAskingPriceData(
+						stockAskingPriceUriBuilder,
+						stockAskingPriceHeaders);
+
+				stockAskingPriceRepository.save(StockAskingPrice.builder()
+						.stockCode(companyInfo.getStockCode())
+						.aspr_acpt_hour(dto.getAspr_acpt_hour())
+						.askp1(dto.getAskp1())
+						.askp2(dto.getAskp2())
+						.askp3(dto.getAskp3())
+						.askp_rsqn1(dto.getAskp_rsqn1())
+						.askp_rsqn2(dto.getAskp_rsqn2())
+						.askp_rsqn3(dto.getAskp_rsqn3())
+						.bidp1(dto.getBidp1())
+						.bidp2(dto.getBidp2())
+						.bidp3(dto.getBidp3())
+						.bidp_rsqn1(dto.getBidp_rsqn1())
+						.bidp_rsqn2(dto.getBidp_rsqn2())
+						.bidp_rsqn3(dto.getBidp_rsqn3())
+						.total_askp_rsqn(dto.getTotal_askp_rsqn())
+						.total_bidp_rsqn(dto.getTotal_bidp_rsqn())
+						.build());
+
+				Thread.sleep(50);
+			} catch (JsonProcessingException | InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		});
+
+		List<String> ids = idList.stream()
+				.map(KisSchedulerServiceImp::parseObjectId)
+				.toList();
+
+		stockAskingPriceRepository.deleteAllById(ids);
+
+		log.info("collectStockAskingPrice 스케쥴러 종료");
+	}
+
+	private UriComponentsBuilder createStockAskingPriceUriBuilder() {
+		return UriComponentsBuilder.fromUriString(KisUrls.STOCK_ASKING_PRICE_PATH.getFullUrl())
+				.queryParam("FID_COND_MRKT_DIV_CODE", "J");
+	}
 
 	private UriComponentsBuilder createChartIndexUriBuilder() {
 		return UriComponentsBuilder.fromUriString(KisUrls.ITEM_CHART_PRICE_TIME_PATH.getFullUrl())
@@ -479,11 +594,21 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 				.queryParam("FID_ORG_ADJ_PRC", "0");
 	}
 
-	private HttpHeaders createChartIndexHeaders() throws JsonProcessingException {
+	private HttpHeaders createStockAskingPriceHeaders(String kisAccessToken) {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
-		headers.set("authorization",
-				"Bearer " + kisApiService.getKisAccessToken().getAccess_token());
+		headers.set("authorization", "Bearer " + kisAccessToken);
+		headers.set("appkey", appKey);
+		headers.set("appsecret", appSecret);
+		headers.set("tr_id", "FHKST01010200");
+		headers.set("custtype", "P");
+		return headers;
+	}
+
+	private HttpHeaders createChartIndexHeaders(String kisAccessToken) {
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		headers.set("authorization", "Bearer " + kisAccessToken);
 		headers.set("appkey", appKey);
 		headers.set("appsecret", appSecret);
 		headers.set("tr_id", "FHPUP02100000");
@@ -491,11 +616,10 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		return headers;
 	}
 
-	private HttpHeaders createChartTimeHeaders() throws JsonProcessingException {
+	private HttpHeaders createChartTimeHeaders(String kisAccessToken) {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
-		headers.set("authorization",
-				"Bearer " + kisApiService.getKisAccessToken().getAccess_token());
+		headers.set("authorization", "Bearer " + kisAccessToken);
 		headers.set("appkey", appKey);
 		headers.set("appsecret", appSecret);
 		headers.set("tr_id", "FHKST03010200");
@@ -503,11 +627,10 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		return headers;
 	}
 
-	private HttpHeaders createFluctuationRankHeaders() throws JsonProcessingException {
+	private HttpHeaders createFluctuationRankHeaders(String kisAccessToken) {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
-		headers.set("authorization",
-				"Bearer " + kisApiService.getKisAccessToken().getAccess_token());
+		headers.set("authorization", "Bearer " + kisAccessToken);
 		headers.set("appkey", appKey);
 		headers.set("appsecret", appSecret);
 		headers.set("tr_id", "FHPST01700000");
@@ -515,11 +638,10 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		return headers;
 	}
 
-	private HttpHeaders createInvestorHeaders() throws JsonProcessingException {
+	private HttpHeaders createInvestorHeaders(String kisAccessToken) {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
-		headers.set("authorization",
-				"Bearer " + kisApiService.getKisAccessToken().getAccess_token());
+		headers.set("authorization", "Bearer " + kisAccessToken);
 		headers.set("appkey", appKey);
 		headers.set("appsecret", appSecret);
 		headers.set("tr_id", "FHKST01010900");
@@ -527,11 +649,10 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		return headers;
 	}
 
-	private HttpHeaders createChartHeaders() throws JsonProcessingException {
+	private HttpHeaders createChartHeaders(String kisAccessToken) {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
-		headers.set("authorization",
-				"Bearer " + kisApiService.getKisAccessToken().getAccess_token());
+		headers.set("authorization", "Bearer " + kisAccessToken);
 		headers.set("appkey", appKey);
 		headers.set("appsecret", appSecret);
 		headers.set("tr_id", "FHKST03010100");
@@ -539,13 +660,32 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		return headers;
 	}
 
-	private IndexDataDto fetchAndExtractIndexData(UriComponentsBuilder builder)
-			throws JsonProcessingException {
+	private StockAskingPriceDataDto fetchAndExtractStockAskingPriceData(
+			UriComponentsBuilder builder,
+			HttpHeaders headers
+	) throws JsonProcessingException {
 		// 한국 투자 증권 API 호출
 		ResponseEntity<String> response = restTemplate.exchange(
 				builder.toUriString(),
 				HttpMethod.GET,
-				new HttpEntity<>(createChartIndexHeaders()),
+				new HttpEntity<>(headers),
+				String.class);
+
+		// API 응답 데이터 JSON 파싱
+		JsonNode jsonNode = objectMapper.readTree(response.getBody());
+		return objectMapper.convertValue(jsonNode.path("output1"), new TypeReference<>() {
+		});
+	}
+
+	private IndexDataDto fetchAndExtractIndexData(
+			UriComponentsBuilder builder,
+			HttpHeaders headers
+	) throws JsonProcessingException {
+		// 한국 투자 증권 API 호출
+		ResponseEntity<String> response = restTemplate.exchange(
+				builder.toUriString(),
+				HttpMethod.GET,
+				new HttpEntity<>(headers),
 				String.class);
 
 		// API 응답 데이터 JSON 파싱
@@ -555,13 +695,15 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	}
 
 	// 투자자 데이터 추출
-	private List<InvestorDataDto> fetchAndExtractInvestorData(UriComponentsBuilder builder)
-			throws JsonProcessingException {
+	private List<InvestorDataDto> fetchAndExtractInvestorData(
+			UriComponentsBuilder builder,
+			HttpHeaders headers
+	) throws JsonProcessingException {
 		// 한국 투자 증권 API 호출
 		ResponseEntity<String> response = restTemplate.exchange(
 				builder.toUriString(),
 				HttpMethod.GET,
-				new HttpEntity<>(createInvestorHeaders()),
+				new HttpEntity<>(headers),
 				String.class);
 
 		// API 응답 데이터 JSON 파싱
@@ -570,30 +712,34 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 		});
 	}
 
-	private List<StockTimeDataDto> fetchAndExtractChartTimeData(UriComponentsBuilder builder)
-			throws JsonProcessingException {
+	private StockTimeDataDto fetchAndExtractChartTimeData(
+			UriComponentsBuilder builder,
+			HttpHeaders headers
+	) throws JsonProcessingException {
 		// 한국 투자 증권 API 호출
 		ResponseEntity<String> response = restTemplate.exchange(
 				builder.toUriString(),
 				HttpMethod.GET,
-				new HttpEntity<>(createChartTimeHeaders()),
+				new HttpEntity<>(headers),
 				String.class);
 
 		// API 응답 데이터 JSON 파싱
 		JsonNode jsonNode = objectMapper.readTree(response.getBody());
-		return objectMapper.convertValue(jsonNode.path("output2"), new TypeReference<>() {
+		return objectMapper.convertValue(jsonNode.path("output1"), new TypeReference<>() {
 		});
 	}
 
 	// 주식 데이터 추출
 
-	private List<StockDataDto> fetchAndExtractStockData(UriComponentsBuilder builder)
-			throws JsonProcessingException {
+	private List<StockDataDto> fetchAndExtractStockData(
+			UriComponentsBuilder builder,
+			HttpHeaders headers
+	) throws JsonProcessingException {
 		// 한국 투자 증권 API 호출
 		ResponseEntity<String> response = restTemplate.exchange(
 				builder.toUriString(),
 				HttpMethod.GET,
-				new HttpEntity<>(createChartHeaders()),
+				new HttpEntity<>(headers),
 				String.class);
 
 		// API 응답 데이터 JSON 파싱
@@ -604,12 +750,14 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	// 등락률 순위 데이터 추출
 	private List<FluctuationRankDataDto> fetchAndExtractFluctuationRankData(
-			UriComponentsBuilder builder)
-			throws JsonProcessingException {
+			UriComponentsBuilder builder,
+			HttpHeaders headers
+	) throws JsonProcessingException {
+
 		ResponseEntity<String> response = restTemplate.exchange(
 				builder.toUriString(),
 				HttpMethod.GET,
-				new HttpEntity<>(createFluctuationRankHeaders()),
+				new HttpEntity<>(headers),
 				String.class);
 
 		// API 응답 데이터 JSON 파싱
