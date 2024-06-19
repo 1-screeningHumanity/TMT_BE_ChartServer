@@ -34,44 +34,52 @@ public class KisApiServiceImp implements KisApiService {
 	private String appSecret;
 
 	@Override
-	public KisAccessToken getKisAccessToken() throws JsonProcessingException {
-		log.info("토큰 테스트");
-		String token = redisTemplate.opsForValue().get("kisAccessToken");
+	public KisAccessToken getKisAccessToken() {
+		try {
+			log.info("토큰 테스트");
 
-		log.info("token: {}", token);
-		log.info("token status: {}", token == null);
+			String token = redisTemplate.opsForValue().get("kisAccessToken");
 
-		return token == null ? createKisAccessToken() : objectMapper.readValue(
-				token, KisAccessToken.class);
+			log.info("token: {}", token);
+			log.info("token status: {}", token == null);
+
+			return token == null ? createKisAccessToken() : objectMapper.readValue(
+					token, KisAccessToken.class);
+		}catch (Exception e) {
+			throw new RuntimeException();
+		}
 	}
-	private KisAccessToken createKisAccessToken() throws JsonProcessingException {
+	private KisAccessToken createKisAccessToken() {
 		// Request Body 설정
 		Map<String, String> body = new HashMap<>();
 		body.put("grant_type", "client_credentials");
 		body.put("appkey", appKey);
 		body.put("appsecret", appSecret);
 
-		// Request Body JSON 변환
-		String jsonBody = objectMapper.writeValueAsString(body);
+		try {
+			// Request Body JSON 변환
+			String jsonBody = objectMapper.writeValueAsString(body);
 
-		// RestTemplate 을 이용한 POST 통신
-		ResponseEntity<String> response = restTemplate.exchange(
-				KisUrls.TOKEN_PATH.getFullUrl(),
-				HttpMethod.POST,
-				new HttpEntity<>(jsonBody, null),
-				String.class);
+			// RestTemplate 을 이용한 POST 통신
+			ResponseEntity<String> response = restTemplate.exchange(
+					KisUrls.TOKEN_PATH.getFullUrl(),
+					HttpMethod.POST,
+					new HttpEntity<>(jsonBody, null),
+					String.class);
 
-		// Response Body JSON 변환
-		KisAccessToken kisAccessToken = objectMapper.readValue(response.getBody(),
-				KisAccessToken.class);
+			// Response Body JSON 변환
+			KisAccessToken kisAccessToken = objectMapper.readValue(response.getBody(),
+					KisAccessToken.class);
 
-		// 토큰 시간(86400초 - 3600초(1시간)) 지정 후 Redis 에 토큰 저장
-		redisTemplate.opsForValue()
-				.set("kisAccessToken", objectMapper.writeValueAsString(kisAccessToken),
-						Long.parseLong(kisAccessToken.getExpires_in()) - ONE_HOUR_TO_SECONDS,
-						TimeUnit.SECONDS);
+			// 토큰 시간(86400초 - 3600초(1시간)) 지정 후 Redis 에 토큰 저장
+			redisTemplate.opsForValue()
+					.set("kisAccessToken", objectMapper.writeValueAsString(kisAccessToken),
+							Long.parseLong(kisAccessToken.getExpires_in()) - ONE_HOUR_TO_SECONDS,
+							TimeUnit.SECONDS);
 
-		return kisAccessToken;
+			return kisAccessToken;
+		} catch (JsonProcessingException e) {
+			throw new RuntimeException(e);
+		}
 	}
-
 }
