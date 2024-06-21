@@ -118,10 +118,13 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 					return;
 				}
 
+				DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS");
+				String formattedDateTime = LocalDateTime.now().format(formatter);
+
 				kafkaProducerService.sendTrade("{\n"
 						+ "  \"stockCode\":\"" + companyInfo.getStockCode() + "\",\n"
 						+ "  \"price\":\"" + stockTimeDataDto.getStck_prpr() + "\",\n"
-						+ "  \"date\":\"" + LocalDateTime.now().toString() + "\"\n"
+						+ "  \"date\":\"" + formattedDateTime + "\"\n"
 						+ "}");
 
 				MinOfStock minOfStock = MinOfStock.builder()
