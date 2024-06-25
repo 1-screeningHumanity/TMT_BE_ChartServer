@@ -13,6 +13,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -66,6 +67,7 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	private static final Integer LAST_DAY = 1;
 	private static final Integer TIME_SPLIT = 8;
 	private final RestTemplate restTemplate;
+	private final RedisTemplate<String, String> redisTemplate;
 	private final ObjectMapper objectMapper;
 	private final KisApiService kisApiService;
 	private final KafkaProducerService kafkaProducerService;
@@ -118,14 +120,20 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 					return;
 				}
 
-				DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS");
+				DateTimeFormatter formatter = DateTimeFormatter.ofPattern(
+						"yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS");
 				String formattedDateTime = LocalDateTime.now().format(formatter);
 
+				// kafka
 				kafkaProducerService.sendTrade("{\n"
 						+ "  \"stockCode\":\"" + companyInfo.getStockCode() + "\",\n"
 						+ "  \"price\":\"" + stockTimeDataDto.getStck_prpr() + "\",\n"
 						+ "  \"date\":\"" + formattedDateTime + "\"\n"
 						+ "}");
+
+				// redis
+				redisTemplate.opsForValue().set("stock:" + companyInfo.getStockCode(),
+						stockTimeDataDto.getStck_prpr());
 
 				MinOfStock minOfStock = MinOfStock.builder()
 						.stockCode(companyInfo.getStockCode())
