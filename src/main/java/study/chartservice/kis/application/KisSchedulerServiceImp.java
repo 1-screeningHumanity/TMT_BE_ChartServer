@@ -88,6 +88,13 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 	@Value("${kis.realApp.secret}")
 	private String appSecret;
 
+	// 실시간 주식에 사용하는 상위 20개 코드 리스트
+	private final List<String> stockCodes = List.of(
+			"005930", "000660", "373220", "207940", "005380",
+			"005935", "000270", "068270", "005490", "105560",
+			"035420", "006400", "051910", "028260", "055550",
+			"012330", "003670", "035720", "247540", "009830");
+
 
 	@Override
 	@Transactional
@@ -131,9 +138,11 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 						+ "  \"date\":\"" + formattedDateTime + "\"\n"
 						+ "}");
 
-				// redis
-				redisTemplate.opsForValue().set("stock:" + companyInfo.getStockCode(),
-						stockTimeDataDto.getStck_prpr());
+				if (!stockCodes.contains(companyInfo.getStockCode())) {
+					// redis 저장
+					redisTemplate.opsForValue().set("stock:" + companyInfo.getStockCode(),
+							stockTimeDataDto.getStck_prpr());
+				}
 
 				MinOfStock minOfStock = MinOfStock.builder()
 						.stockCode(companyInfo.getStockCode())
