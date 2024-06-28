@@ -36,12 +36,7 @@ public class KisApiServiceImp implements KisApiService {
 	@Override
 	public KisAccessToken getKisAccessToken() {
 		try {
-			log.info("토큰 테스트");
-
 			String token = redisTemplate.opsForValue().get("kisAccessToken");
-
-			log.info("token: {}", token);
-			log.info("token status: {}", token == null);
 
 			return token == null ? createKisAccessToken() : objectMapper.readValue(
 					token, KisAccessToken.class);
