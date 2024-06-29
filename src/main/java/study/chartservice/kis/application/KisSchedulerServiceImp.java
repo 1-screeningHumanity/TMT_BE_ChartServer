@@ -19,9 +19,13 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 import study.chartservice.chart.application.KafkaProducerService;
@@ -95,9 +99,21 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 			"035420", "006400", "051910", "028260", "055550",
 			"012330", "003670", "035720", "247540", "009830");
 
+	/**
+	 * Retryable 실패 시 동작 메서드
+	 */
+	@Recover
+	public void recoverLog() {
+		log.info("Retryable 이후 실패 = {}", this.toString());
+	}
 
 	@Override
 	@Transactional
+	@Retryable(
+			retryFor = {HttpServerErrorException.class, JsonProcessingException.class},
+			maxAttempts = 3,
+			backoff = @Backoff(delay = 1500L)
+	)
 	@Scheduled(cron = "0 0/30 9-15 * * MON-FRI")    // 9~16시 사이에 30분마다 호출
 	public void collectKisDatOfTime() {
 		log.info("collectKisDatOfTime 스케줄러 실행");
@@ -176,6 +192,11 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
+	@Retryable(
+			retryFor = {HttpServerErrorException.class, JsonProcessingException.class},
+			maxAttempts = 3,
+			backoff = @Backoff(delay = 1500L)
+	)
 	@Scheduled(cron = "0 0 17 * * MON-FRI")    // 평일 17시 호출
 	public void collectKisDataOfDay() {
 		log.info("collectKisDataOfDay 스케줄러 실행");
@@ -224,6 +245,11 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
+	@Retryable(
+			retryFor = {HttpServerErrorException.class, JsonProcessingException.class},
+			maxAttempts = 3,
+			backoff = @Backoff(delay = 1500L)
+	)
 	@Scheduled(cron = "0 0 18 * * FRI")    // 매주 금요일 18시 호출
 	public void collectKisDataOfWeek() {
 		log.info("collectKisDataOfWeek 스케줄러 실행");
@@ -281,6 +307,11 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
+	@Retryable(
+			retryFor = {HttpServerErrorException.class, JsonProcessingException.class},
+			maxAttempts = 3,
+			backoff = @Backoff(delay = 1500L)
+	)
 	@Scheduled(cron = "0 0 5 1 * ?")    // 매월 1일 5시 호출
 	public void collectKisDataOfMonth() {
 		log.info("collectKisDataOfMonth 스케줄러 실행");
@@ -333,6 +364,11 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
+	@Retryable(
+			retryFor = {HttpServerErrorException.class, JsonProcessingException.class},
+			maxAttempts = 3,
+			backoff = @Backoff(delay = 1500L)
+	)
 	@Scheduled(cron = "0 0 4 1 1 *")    // 매년 1월 1일 4시 호출
 	public void collectKisDataOfYear() {
 		log.info("collectKisDataOfYear 스케줄러 실행");
@@ -381,6 +417,11 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
+	@Retryable(
+			retryFor = {HttpServerErrorException.class, JsonProcessingException.class},
+			maxAttempts = 3,
+			backoff = @Backoff(delay = 1500L)
+	)
 	@Scheduled(cron = "0 0 7 * * MON-FRI")    // 평일 7시 호출
 	public void collectInvestor() {
 		log.info("collectInvestor 스케줄러 실행");
@@ -428,6 +469,11 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
+	@Retryable(
+			retryFor = {HttpServerErrorException.class, JsonProcessingException.class},
+			maxAttempts = 3,
+			backoff = @Backoff(delay = 1500L)
+	)
 	@Scheduled(cron = "0 0/20 9-15 * * MON-FRI")    // 9~16시 사이에 20분마다 호출
 	public void collectFluctuationRank() {
 		log.info("collectFluctuationRank 스케줄러 실행");
@@ -471,6 +517,11 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
+	@Retryable(
+			retryFor = {HttpServerErrorException.class, JsonProcessingException.class},
+			maxAttempts = 3,
+			backoff = @Backoff(delay = 1500L)
+	)
 	@Scheduled(cron = "0 0/25 9-15 * * MON-FRI")    // 9~16시 사이에 25분마다 호출
 	public void collectKisDataOfIndex() {
 		log.info("collectKisDataOfIndex 스케쥴러 실행");
@@ -512,6 +563,11 @@ public class KisSchedulerServiceImp implements KisSchedulerService {
 
 	@Override
 	@Transactional
+	@Retryable(
+			retryFor = {HttpServerErrorException.class, JsonProcessingException.class},
+			maxAttempts = 3,
+			backoff = @Backoff(delay = 1500L)
+	)
 	@Scheduled(cron = "0 0/30 9-15 * * MON-FRI")    // 9~16시 사이에 30분마다 호출
 	public void collectStockAskingPrice() {
 		log.info("collectStockAskingPrice 스케쥴러 실행");
