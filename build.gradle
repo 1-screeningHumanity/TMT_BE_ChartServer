@@ -47,6 +47,12 @@ dependencies {
     //Kafka
     implementation 'org.springframework.kafka:spring-kafka'
 
+    //Spring Retry
+    implementation 'org.springframework.retry:spring-retry'
+
+    //Spring-aspects
+    implementation 'org.springframework:spring-aspects'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
